@@ -13,3 +13,6 @@ grubz/recording/
 # Disposable Secure Boot test keys, firmware variables and images
 grubz/secureboot-local/
 grubz/shim-local/
+
+# Machine-specific deployment state, backups and signing keys
+grubz/host-local/
