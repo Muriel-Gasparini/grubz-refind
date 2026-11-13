@@ -65,13 +65,13 @@ in `secureboot-local/binaries.sha256`.
 
 ## Limits and next validation
 
-This proves signature enforcement and EFI demo handoff for this virtual firmware
+This direct-db test proves signature enforcement and EFI demo handoff for this virtual firmware
 with its own trust database. It does **not** prove that the physical firmware or
-Debian shim will trust the certificate. No shim/MOK enrollment or SBAT/revocation
-compatibility with that chain has been validated here. Neither demo is an actual
-Debian/Windows installation. Before host deployment, test the intended shim/MOK
-chain separately, including rejection of untrusted images, then use a reversible
-one-time boot on the real hardware.
+Debian shim will trust the certificate. The subsequent [shim/MOK test](SHIM-MOK.md)
+separately validates that chain and interactive VM enrollment with the documented
+versions and virtual trust stores. Neither demo is an actual Debian/Windows
+installation. Physical firmware and its revocation policy still require a
+reversible one-time boot test before host deployment.
 
 References: [QEMU variable protection](https://www.qemu.org/docs/master/devel/uefi-vars.html),
 [virt-firmware](https://gitlab.com/kraxel/virt-firmware),

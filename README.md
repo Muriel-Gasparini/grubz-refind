@@ -67,7 +67,9 @@ validate physical firmware, Secure Boot, BitLocker, or installed operating syste
 
 Secure Boot enforcement is tested separately with disposable keys and a signed
 EFI probe. See [the procedure and observed results](grubz/SECUREBOOT.md).
-This uses direct firmware `db` trust, not the Debian shim/MOK chain.
+The first test uses direct firmware `db` trust. A separate
+[Debian shim/MOK validation](grubz/SHIM-MOK.md) covers MOK-only trust,
+negative cases, and interactive enrollment through MokManager in the VM.
 
 ## Upstream maintenance
 
