@@ -393,6 +393,8 @@ typedef struct {
    UINT32_LIST      *CsrValues;
    UINTN            ShowTools[NUM_TOOLS];
    CHAR8            ScanFor[NUM_SCAN_OPTIONS]; // codes of types of loaders for which to scan
+   UINTN            InactiveIconBrightness;
+   UINTN            SelectionAnimationMs;
 } REFIT_CONFIG;
 
 // Global variables

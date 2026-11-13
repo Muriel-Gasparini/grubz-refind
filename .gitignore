@@ -1,0 +1,11 @@
+*.o
+*.obj
+*.a
+*.so
+*.efi
+*.pyc
+__pycache__/
+grubz/vm/
+grubz/toolchain/
+grubz/downloads/
+grubz/recording/

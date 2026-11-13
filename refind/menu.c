@@ -1074,24 +1074,137 @@ VOID GraphicsMenuStyle(IN REFIT_MENU_SCREEN *Screen,
 // graphical main menu style
 //
 
-static VOID DrawMainMenuEntry(REFIT_MENU_ENTRY *Entry, BOOLEAN selected, UINTN XPos, UINTN YPos)
-{
-    EG_IMAGE *Background;
+#include "selection_fx.h"
 
-    // if using pointer, don't draw selection image when not hovering
-    if (selected && DrawSelection) {
-        Background = egCropImage(GlobalConfig.ScreenBackground, XPos, YPos,
-                                 SelectionImages[Entry->Row]->Width, SelectionImages[Entry->Row]->Height);
-        if (Background) {
-            egComposeImage(Background, SelectionImages[Entry->Row], 0, 0);
-            BltImageCompositeBadge(Background, Entry->Image, Entry->BadgeImage, XPos, YPos);
-            egFreeImage(Background);
-        } // if
-    } else { // Image not selected; copy background
-        egDrawImageWithTransparency(Entry->Image, Entry->BadgeImage, XPos, YPos,
-                                    SelectionImages[Entry->Row]->Width, SelectionImages[Entry->Row]->Height);
-    } // if/else
-} // VOID DrawMainMenuEntry()
+/* Compose offscreen so transitions never flash their final state first. */
+static EG_IMAGE *GrubzMenuTile(REFIT_MENU_ENTRY *Entry, BOOLEAN Selected,
+                               UINTN X, UINTN Y) {
+    EG_IMAGE *Tile, *Icon;
+    UINTN W, H, DX, DY;
+    Tile = egCropImage(GlobalConfig.ScreenBackground, X, Y,
+                       SelectionImages[Entry->Row]->Width,
+                       SelectionImages[Entry->Row]->Height);
+    if (!Tile) return NULL;
+    Tile->HasAlpha = FALSE;
+    if (Selected && DrawSelection)
+        egComposeImage(Tile, SelectionImages[Entry->Row], 0, 0);
+    Icon = Entry->Image ? egCopyImage(Entry->Image) : NULL;
+    if (Entry->Image && !Icon) { egFreeImage(Tile); return NULL; }
+    if (Icon) {
+        if (Entry->Row == 0 && !(Selected && DrawSelection))
+            GrubzDimImage(Icon, GlobalConfig.InactiveIconBrightness);
+        W = Icon->Width < Tile->Width ? Icon->Width : Tile->Width;
+        H = Icon->Height < Tile->Height ? Icon->Height : Tile->Height;
+        DX = (Tile->Width - W) / 2;
+        DY = (Tile->Height - H) / 2;
+        egComposeImage(Tile, Icon, DX, DY);
+        if (Entry->BadgeImage && Entry->BadgeImage->Width + 8 < W && Entry->BadgeImage->Height + 8 < H)
+            egComposeImage(Tile, Entry->BadgeImage, DX + W - 8 - Entry->BadgeImage->Width,
+                            DY + H - 8 - Entry->BadgeImage->Height);
+        egFreeImage(Icon);
+    }
+    return Tile;
+}
+
+static VOID DrawMainMenuEntry(REFIT_MENU_ENTRY *Entry, BOOLEAN Selected, UINTN X, UINTN Y) {
+    EG_IMAGE *Tile = GrubzMenuTile(Entry, Selected, X, Y);
+    if (Tile) {
+        egDrawImage(Tile, X, Y);
+        egFreeImage(Tile);
+    } else {
+        /* Low-memory fallback retains a usable menu without effects. */
+        egDrawImageWithTransparency(Entry->Image, Entry->BadgeImage, X, Y,
+                                    SelectionImages[Entry->Row]->Width,
+                                    SelectionImages[Entry->Row]->Height);
+    }
+}
+
+/* Paint an icon into a shared animation canvas, preserving badge placement. */
+static VOID GrubzComposeMovingIcon(EG_IMAGE *Canvas, REFIT_MENU_ENTRY *Entry,
+                                   EG_IMAGE *Icon, UINTN X, UINTN Y, unsigned Brightness) {
+    UINTN W, H, DX, DY;
+    if (!Icon) return;
+    CopyMem(Icon->PixelData, Entry->Image->PixelData,
+            Icon->Width * Icon->Height * sizeof(EG_PIXEL));
+    GrubzDimImage(Icon, Brightness);
+    W = Icon->Width < SelectionImages[0]->Width ? Icon->Width : SelectionImages[0]->Width;
+    H = Icon->Height < SelectionImages[0]->Height ? Icon->Height : SelectionImages[0]->Height;
+    DX = X + (SelectionImages[0]->Width - W) / 2;
+    DY = Y + (SelectionImages[0]->Height - H) / 2;
+    egComposeImage(Canvas, Icon, DX, DY);
+    if (Entry->BadgeImage && Entry->BadgeImage->Width + 8 < W && Entry->BadgeImage->Height + 8 < H)
+        egComposeImage(Canvas, Entry->BadgeImage, DX + W - 8 - Entry->BadgeImage->Width,
+                        DY + H - 8 - Entry->BadgeImage->Height);
+}
+
+/* Slide the selection artwork across one canvas. Input interrupts without
+ * consuming the pending key; final-state paint precedes normal key handling. */
+static VOID GrubzAnimateSelection(REFIT_MENU_ENTRY *Previous, REFIT_MENU_ENTRY *Current,
+                                  UINTN PX, UINTN PY, UINTN CX, UINTN CY) {
+    EG_IMAGE *Base = NULL, *Frame = NULL, *OldIcon = NULL, *NewIcon = NULL;
+    UINTN Step, Steps, Input, Left, Right, X, Brightness, Created = 0, Tick = 0, Painted = 0;
+    EFI_EVENT Timers[64];
+    EFI_STATUS Status;
+    if (!GlobalConfig.SelectionAnimationMs || Previous == Current || PointerActive ||
+        !DrawSelection || Previous->Row != 0 || Current->Row != 0 || PY != CY ||
+        !Previous->Image || !Current->Image) return;
+    /* Non-adjacent shortcuts may cross other entries: repaint statically. */
+    if ((PX > CX ? PX - CX : CX - PX) != TileSizes[0] + TILE_XSPACING) return;
+    Left = PX < CX ? PX : CX;
+    Right = (PX > CX ? PX : CX) + SelectionImages[0]->Width;
+    Base = egCropImage(GlobalConfig.ScreenBackground, Left, PY, Right - Left,
+                       SelectionImages[0]->Height);
+    if (!Base) goto cleanup;
+    Base->HasAlpha = FALSE;
+    Frame = egCopyImage(Base);
+    OldIcon = egCopyImage(Previous->Image);
+    NewIcon = egCopyImage(Current->Image);
+    if (!Frame || !OldIcon || !NewIcon) goto cleanup;
+    Steps = (GlobalConfig.SelectionAnimationMs + 15) / 16;
+    /* Prearm timer milestones together, so rendering time does not accumulate
+     * into the duration. Slow firmware skips overdue frames rather than lagging. */
+    for (Step = 0; Step < Steps; Step++) {
+        Status = refit_call5_wrapper(BS->CreateEvent, EVT_TIMER, 0, NULL, NULL, &Timers[Step]);
+        if (EFI_ERROR(Status)) goto cleanup;
+        Created++;
+        Status = refit_call3_wrapper(BS->SetTimer, Timers[Step], TimerRelative,
+                                     (UINT64)(Step + 1) * GlobalConfig.SelectionAnimationMs * 10000 / Steps);
+        if (EFI_ERROR(Status)) goto cleanup;
+    }
+    while (Tick < Steps) {
+        unsigned Progress;
+        while (Tick < Steps && refit_call1_wrapper(BS->CheckEvent, Timers[Tick]) == EFI_SUCCESS) Tick++;
+        if (Tick == Steps) break;
+        if (refit_call1_wrapper(BS->CheckEvent, ST->ConIn->WaitForKey) == EFI_SUCCESS) break;
+        if (Tick == Painted) {
+            Input = WaitForInput(1);
+            if (Input != INPUT_TIMEOUT) break;
+            continue;
+        }
+        Painted = Tick;
+        Progress = GrubzEase((unsigned)(Tick * 1024 / Steps));
+        CopyMem(Frame->PixelData, Base->PixelData, Base->Width * Base->Height * sizeof(EG_PIXEL));
+        X = GrubzPosition(PX - Left, CX - Left, Progress);
+        egComposeImage(Frame, SelectionImages[0], X, 0);
+        Brightness = GrubzPosition(100, GlobalConfig.InactiveIconBrightness, Progress);
+        GrubzComposeMovingIcon(Frame, Previous, OldIcon, PX - Left, 0, Brightness);
+        Brightness = GrubzPosition(GlobalConfig.InactiveIconBrightness, 100, Progress);
+        GrubzComposeMovingIcon(Frame, Current, NewIcon, CX - Left, 0, Brightness);
+        egDrawImageArea(Frame, 0, 0, Frame->Width, Frame->Height, Left, PY);
+    }
+    /* One final composite avoids a blank flash and clears travel-area trails. */
+    CopyMem(Frame->PixelData, Base->PixelData, Base->Width * Base->Height * sizeof(EG_PIXEL));
+    egComposeImage(Frame, SelectionImages[0], CX - Left, 0);
+    GrubzComposeMovingIcon(Frame, Previous, OldIcon, PX - Left, 0, GlobalConfig.InactiveIconBrightness);
+    GrubzComposeMovingIcon(Frame, Current, NewIcon, CX - Left, 0, 100);
+    egDrawImageArea(Frame, 0, 0, Frame->Width, Frame->Height, Left, PY);
+cleanup:
+    for (Step = 0; Step < Created; Step++) refit_call1_wrapper(BS->CloseEvent, Timers[Step]);
+    if (Base) egFreeImage(Base);
+    if (Frame) egFreeImage(Frame);
+    if (OldIcon) egFreeImage(OldIcon);
+    if (NewIcon) egFreeImage(NewIcon);
+}
 
 static VOID PaintAll(IN REFIT_MENU_SCREEN *Screen, IN SCROLL_STATE *State, UINTN *itemPosX,
                      UINTN row0PosY, UINTN row1PosY, UINTN textPosY) {
@@ -1150,6 +1263,9 @@ static VOID PaintSelection(IN REFIT_MENU_SCREEN *Screen, IN SCROLL_STATE *State,
             XSelectCur = State->CurrentSelection;
             YPosCur = row1PosY;
         } // if/else
+        GrubzAnimateSelection(Screen->Entries[State->PreviousSelection],
+                              Screen->Entries[State->CurrentSelection],
+                              itemPosX[XSelectPrev], YPosPrev, itemPosX[XSelectCur], YPosCur);
         DrawMainMenuEntry(Screen->Entries[State->PreviousSelection], FALSE,
                           itemPosX[XSelectPrev], YPosPrev);
         DrawMainMenuEntry(Screen->Entries[State->CurrentSelection], TRUE,

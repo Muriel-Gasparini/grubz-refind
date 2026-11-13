@@ -63,3 +63,9 @@ clean:
 	rm -f $(TARGET) *~ *.so $(OBJS) *.efi *.obj refind_*.txt \
 		refind_*.dll *.lib
 
+
+# Grubz rendering/version headers must invalidate their consumers.
+menu.o: selection_fx.h global.h
+main.o: ../include/version.h global.h
+config.o: global.h
+$(TARGET): $(SRCDIR)/../$(REFIND_SBAT_CSV)

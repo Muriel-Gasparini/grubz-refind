@@ -780,6 +780,14 @@ VOID ReadConfig(CHAR16 *FileName)
                     GlobalConfig.RequestedScreenHeight = 0;
             }
 
+        } else if (MyStriCmp(TokenList[0], L"inactive_icon_brightness")) {
+            HandleInt(TokenList, TokenCount, &(GlobalConfig.InactiveIconBrightness));
+            if (GlobalConfig.InactiveIconBrightness > 100)
+                GlobalConfig.InactiveIconBrightness = 100;
+        } else if (MyStriCmp(TokenList[0], L"selection_animation_ms")) {
+            HandleInt(TokenList, TokenCount, &(GlobalConfig.SelectionAnimationMs));
+            if (GlobalConfig.SelectionAnimationMs > 1000)
+                GlobalConfig.SelectionAnimationMs = 120;
         } else if (MyStriCmp(TokenList[0], L"screensaver")) {
             HandleInt(TokenList, TokenCount, &(GlobalConfig.ScreensaverTime));
 

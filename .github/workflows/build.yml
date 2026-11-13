@@ -1,0 +1,19 @@
+name: Build and test
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  x86_64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y gnu-efi build-essential
+      - name: Test selection rendering
+        run: bash grubz/test.sh
+      - name: Build EFI binary
+        run: bash grubz/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grubz-refind-x86_64
+          path: refind/refind_x64.efi
