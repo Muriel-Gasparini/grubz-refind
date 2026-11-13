@@ -63,6 +63,12 @@ Rebuild only after stopping it; rebuilding replaces the disposable VM files.
 This verifies the real menu renderer and EFI handoff to demo loaders. It does not
 validate physical firmware, Secure Boot, BitLocker, or installed operating systems.
 
+### Separate Secure Boot VM
+
+Secure Boot enforcement is tested separately with disposable keys and a signed
+EFI probe. See [the procedure and observed results](grubz/SECUREBOOT.md).
+This uses direct firmware `db` trust, not the Debian shim/MOK chain.
+
 ## Upstream maintenance
 
 Upstream: https://git.code.sf.net/p/refind/code

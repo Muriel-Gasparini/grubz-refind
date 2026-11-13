@@ -9,3 +9,6 @@ grubz/vm/
 grubz/toolchain/
 grubz/downloads/
 grubz/recording/
+
+# Disposable Secure Boot test keys, firmware variables and images
+grubz/secureboot-local/
