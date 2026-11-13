@@ -12,7 +12,7 @@ disables animation. Input interrupts the transition without consuming the key.
 - [x] Test channel brightness, alpha preservation, interpolation and easing boundaries.
 - [x] Add configuration and offscreen icon composition; animate only OS-row selection.
 - [x] Build and verify framebuffer endpoints/intermediate frames and both demo loaders.
-- [ ] Review changes; publish source, tests, reproducible build/VM instructions and theme.
+- [x] Review changes; publish source, tests, reproducible build/VM instructions and theme.
 
 Review focus: allocation failure falls back to static rendering; repeated navigation
 and Enter must remain queued; initial/scroll repaint must match endpoints; text mode
