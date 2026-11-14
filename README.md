@@ -2,12 +2,20 @@
 
 A graphical rEFInd derivative with native inactive-icon dimming and a sliding
 selection highlight. Based on **rEFInd 0.14.2**, preserving upstream Git history
-and licenses. Experimental: tested in an isolated QEMU/OVMF VM, not installed
-on a physical machine.
+and licenses. Experimental: tested in isolated QEMU/OVMF VMs and undergoing
+one-time boot tests on physical hardware, with the original bootloaders preserved.
 
 ![Real QEMU/OVMF framebuffer recording](grubz/preview.gif)
 
 ## Native selection
+
+Version `0.14.2-grubz.2` aligns SBAT on a separate 4 KiB page for shim memory
+protection, fixes dark-pixel artifacts when scaling the background, and rebuilds
+static archives without retaining stale object copies. The example uses
+1920×1080; select a graphics mode supported by your firmware. Unsupported modes
+fall back to the firmware default, which can crop oversized artwork and force
+scrolling instead of animated adjacent selection. Physical-hardware validation
+of these fixes is still pending.
 
 ```ini
 inactive_icon_brightness 32

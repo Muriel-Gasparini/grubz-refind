@@ -8,4 +8,5 @@ if [[ -n ${GNU_EFI_ROOT:-} ]]; then
 else
   make gnuefi REFIND_SBAT_CSV=refind-sbat-grubz.csv
 fi
+python3 tests/efi_layout_test.py refind/refind_x64.efi
 printf '\nBuilt: %s/refind/refind_x64.efi\n' "$PWD"

@@ -189,8 +189,10 @@ EG_IMAGE * egScaleImage(IN EG_IMAGE *Image, IN UINTN NewWidth, IN UINTN NewHeigh
 
    for (i = 0; i < NewHeight; i++) {
       for (j = 0; j < NewWidth; j++) {
-         x = (j * (Image->Width - 1)) / NewWidth;
-         y = (i * (Image->Height - 1)) / NewHeight;
+         // Use the same rounded fixed-point coordinates for integer and
+         // fractional parts, avoiding unsigned underflow in dark pixels.
+         x = (x_ratio * j) / FP_MULTIPLIER;
+         y = (y_ratio * i) / FP_MULTIPLIER;
          x_diff = (x_ratio * j) - x * FP_MULTIPLIER;
          y_diff = (y_ratio * i) - y * FP_MULTIPLIER;
          Index = ((y * Image->Width) + x);

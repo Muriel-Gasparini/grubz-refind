@@ -45,7 +45,7 @@ include $(SRCDIR)/../Make.common
 
 all: $(TARGET)
 
-$(SHLIB_TARGET): $(OBJS)
+$(SHLIB_TARGET): $(OBJS) $(SRCDIR)/../libeg/libeg.a
 	$(LD) $(LOCAL_LDFLAGS) $(GNUEFI_LDFLAGS) $(SUBSYSTEM_LDFLAG) $(OBJS) \
 	      -o $@ $(LOCAL_LIBS) $(GNUEFI_LIBS)
 
@@ -55,7 +55,7 @@ $(TARGET): $(SHLIB_TARGET)
 		   -j .reloc --strip-unneeded $(FORMAT) $< $@
 ifneq ($(OMIT_SBAT), 1)
 	    $(OBJCOPY) --add-section .sbat=$(SRCDIR)/../$(REFIND_SBAT_CSV) \
-		       --adjust-section-vma .sbat+10000000 $@
+		       --adjust-section-vma .sbat+0xA00000 $@
 endif
 	chmod a-x $(TARGET)
 
@@ -68,4 +68,5 @@ clean:
 menu.o: selection_fx.h global.h
 main.o: ../include/version.h global.h
 config.o: global.h
-$(TARGET): $(SRCDIR)/../$(REFIND_SBAT_CSV)
+# Keep SBAT on a separate 4 KiB page for shim's memory-attribute checks.
+$(TARGET): $(SRCDIR)/../$(REFIND_SBAT_CSV) $(SRCDIR)/Makefile

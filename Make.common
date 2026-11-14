@@ -204,8 +204,9 @@ endif
 
 ifneq (,$(filter %.a,$(TARGET)))
 
-$(TARGET): $(OBJS)
-	$(AR) cq $@ $(OBJS)
+$(TARGET): $(OBJS) $(SRCDIR)/../Make.common
+	rm -f $@
+	$(AR) crs $@ $(OBJS)
 
 endif
 
