@@ -8,3 +8,4 @@ cc -std=c99 -Wall -Wextra -Werror -fsanitize=undefined \
 "$test_binary"
 python3 tests/image_scale_test.py
 git diff --check
+python3 tests/direct_boot_test.py

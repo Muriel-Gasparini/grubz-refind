@@ -1,0 +1,72 @@
+# Direct Debian boot with Secure Boot
+
+The direct entry loads a signed Unified Kernel Image (UKI): Debian systemd-stub,
+kernel, initramfs, kernel version and command line in a single verified EFI image.
+The path is firmware -> Debian shim -> Grubz -> UKI -> Linux. It does not run GRUB.
+The original Debian and Windows loaders remain separate recovery paths.
+
+`direct_boot.py` uses Debian's `objcopy`, `sbsign`, `sbverify`, `dpkg` and Python 3.11.
+No runtime Python dependency is added to the EFI application. `--build-only` builds
+an isolated artifact; publishing requires root and an explicitly identified mounted
+FAT ESP. It never changes BootOrder, BootNext, keys or firmware settings.
+
+Host configuration is root-owned `/etc/grubz-direct.json`, including `boot`, `esp`,
+`esp_uuid`, `stub`, `key`, `cert`, `os_release` and `cmdline`. Optional absolute
+`objcopy`, `sbsign`, `sbverify` paths support locally extracted Debian tools.
+Signing keys must remain root-only. Do not commit host configuration or keys.
+
+Install the updater as `/usr/local/sbin/grubz-direct-update` and `uki-update-hook`
+as `/etc/initramfs/post-update.d/zz-grubz-direct` (both root-owned executable).
+The initramfs hook runs after successful generation, including Debian kernel package
+post-install triggers and `update-initramfs -u`. Install the same hook also as
+`/etc/kernel/postrm.d/zz-grubz-direct`: Debian does not invoke the initramfs
+post-update hook on deletion. The post-removal hook selects the newest remaining
+pair; if none remains, it fails visibly without deleting the existing UKIs. It selects the newest complete
+kernel/initramfs pair using Debian version comparisons, not lexical ordering.
+
+Publishing stages and verifies the new image on the ESP before replacing
+`EFI/grubz-linux/current.efi`. `previous.efi` retains the preceding published image;
+it is not a promise that this image has booted successfully. It also requires
+the matching installed kernel modules: removing that kernel package can invalidate
+the previous-image fallback. Keep a known-good kernel package installed; the original
+GRUB recovery path is retained independently. A signing/build failure
+or insufficient space leaves current intact and returns an error to package tools.
+Do not ignore that error: the installed kernel package may be newer than the UKI.
+The updater locks concurrent invocations. Atomic rename reduces update exposure;
+it is not a guarantee against firmware/filesystem damage from power loss.
+
+The manual Grubz entry points at `/EFI/grubz-linux/current.efi` with `graphics on`.
+The kernel command line is embedded and signed. After intentional changes to that
+line, regenerate the UKI. Changes to `/etc/default/grub` do not automatically modify
+this separate configuration. Keep a fallback entry to the original Debian shim,
+and optionally a submenu to `previous.efi` once it exists.
+
+To stop future automatic UKI updates, remove both the initramfs and kernel post-removal hooks. To return to the
+original boot path, restore the Grubz Debian entry to its original shim. Do not
+remove original loaders or change firmware defaults as part of this installation.
+
+Validation must distinguish VM from physical hardware. Test a complete Debian boot
+under shim/MOK Secure Boot, a real kernel package upgrade, an initramfs regeneration,
+and a modified unsigned/untrusted image rejection. A passing test cannot guarantee
+that arbitrary future kernels will work on every device.
+
+## Verified integration (Debian 12, QEMU/OVMF)
+
+The isolated guest uses Microsoft-trusting OVMF, Debian shim 16.1, Grubz .2,
+and a disposable signing certificate enrolled **only in MOK**, not firmware db.
+The Linux-side tools use Debian systemd-stub 252.39 and Debian kernels.
+
+| Test | Observed result |
+| --- | --- |
+| Direct UKI boot, 6.1.0-53-amd64 | Debian userspace reached; SecureBoot=1, SetupMode=0, kernel lockdown integrity |
+| Debian package installation, 6.1.0-54-amd64 | Initramfs hook published a signed UKI automatically |
+| Boot through unchanged `current.efi` entry | Debian userspace reached on 6.1.0-54-amd64 with Secure Boot still active |
+| Modify a byte in signed `.cmdline` | Security Policy Violation; Grubz rejected image and returned to selector |
+| Regenerate initramfs for older kernel 53 | Published version remained kernel 54 |
+| Remove kernel package 54 while running 53 | Actual postrm hook published kernel 53 |
+
+Unit tests cover failed build/signature verification, insufficient ESP space,
+wrong mount, numeric version ordering, incomplete pairs, kernel removal and
+preserving the previous artifact on an identical-byte update. Hardware direct
+boot remains a separate test; VM results do not establish compatibility with
+arbitrary future kernels or every physical device.

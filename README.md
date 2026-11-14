@@ -40,6 +40,11 @@ required by the renderer. The Obsidian theme is provided separately in `grubz/th
 
 ## Build and tests (Debian/Ubuntu x86-64)
 
+For Debian boot without chaining through GRUB, see
+[Direct boot with signed UKIs](grubz/DIRECT-BOOT.md). The optional Linux-side
+updater signs kernel, initramfs and command line together and refreshes the image
+after kernel/initramfs changes. Installing it does not change firmware defaults.
+
 Dependencies: `build-essential gnu-efi`. Then:
 
 ```sh

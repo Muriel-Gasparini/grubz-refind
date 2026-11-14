@@ -1,0 +1,9 @@
+#!/bin/sh
+# Used after initramfs generation and after kernel package removal.
+set -eu
+# dpkg also runs kernel postrm during replacement: wait for the new initramfs.
+case "${DEB_MAINT_PARAMS:-}" in
+    upgrade|upgrade\ *) exit 0 ;;
+esac
+[ -f /etc/grubz-direct.json ] || exit 0
+exec /usr/local/sbin/grubz-direct-update
