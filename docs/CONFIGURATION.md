@@ -29,4 +29,3 @@ required by the renderer. The Obsidian theme is provided separately in `grubz/th
 - Initial paint, scrolling, nonadjacent shortcuts, tool-row and pointer selection
   remain static. The text-mode menu is unchanged.
 - Allocation/timer failures fall back to static rendering.
-
