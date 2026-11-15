@@ -1,5 +1,9 @@
 # Debian shim/MOK validation in an isolated VM
 
+This document records the isolated VM stage. The project subsequently completed
+physical Debian boot testing; see the [current status](../README.md) and
+[direct-boot results](DIRECT-BOOT.md). The scope of the tests below is unchanged.
+
 Validated on 2026-11-13. No host boot files, firmware entries, or MOKs were changed.
 All firmware writes went to regular OVMF variable files under ignored `shim-local/`.
 

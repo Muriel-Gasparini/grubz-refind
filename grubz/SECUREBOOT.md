@@ -1,5 +1,9 @@
 # Isolated Secure Boot validation
 
+This document records the isolated VM stage. The project subsequently completed
+physical Debian boot testing; see the [current status](../README.md) and
+[direct-boot results](DIRECT-BOOT.md). The scope of the tests below is unchanged.
+
 This is a VM-only test, not a host installation procedure. It does not enroll
 host keys, mount an ESP, modify host boot entries, or connect physical disks.
 The existing unsigned preview VM is independent of this test.

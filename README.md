@@ -2,41 +2,49 @@
 
 A graphical rEFInd derivative with native inactive-icon dimming and a sliding
 selection highlight. Based on **rEFInd 0.14.2**, preserving upstream Git history
-and licenses. Experimental: tested in isolated QEMU/OVMF VMs and undergoing
-one-time boot tests on physical hardware, with the original bootloaders preserved.
+and licenses. Runs before the operating system, with a custom dark theme,
+native dimming and sliding selection. Despite its name, Grubz is based on rEFInd,
+not GNU GRUB.
+
+[Português (Brasil)](README.pt-BR.md) · [User guide](docs/USER-GUIDE.md) ·
+[Configuration](docs/CONFIGURATION.md) · [Direct Debian boot](grubz/DIRECT-BOOT.md)
+
+**Status:** working as the permanent boot selector on the maintainer’s Debian 12 /
+Windows dual-boot PC. Direct Debian boot with Secure Boot was confirmed on physical
+hardware; kernel-update integration was exercised in a real Debian VM. This is a
+personal, experimental project, not a universal installer or a hardware certification.
+Windows demo handoff was tested in VMs; the physical Windows entry is preserved,
+but a physical Windows boot is not claimed by this validation report.
 
 ![Real QEMU/OVMF framebuffer recording](grubz/preview.gif)
 
-## Native selection
+## What Grubz adds
 
-Version `0.14.2-grubz.2` aligns SBAT on a separate 4 KiB page for shim memory
-protection, fixes dark-pixel artifacts when scaling the background, and rebuilds
-static archives without retaining stale object copies. The example uses
-1920×1080; select a graphics mode supported by your firmware. Unsupported modes
-fall back to the firmware default, which can crop oversized artwork and force
-scrolling instead of animated adjacent selection. Physical-hardware validation
-of these fixes is still pending.
+- Custom generated Obsidian artwork and metallic OS icons.
+- Native inactive-icon dimming and a sliding selection highlight in C.
+- A selector that waits for a deliberate choice (`timeout 0` in rEFInd).
+- Optional signed Unified Kernel Images (UKIs) to boot Debian without an intermediate GRUB screen.
+- Debian initramfs/kernel-removal hooks that publish a newly signed UKI, retaining the previous artifact.
+- Separate preview, Secure Boot and shim/MOK VM tests, including rejection cases.
 
 ```ini
 inactive_icon_brightness 32
 selection_animation_ms 120
+timeout 0
 ```
 
-The selection artwork slides between adjacent OS entries with smoothstep easing;
-icon brightness follows the motion. Original icon alpha is preserved. No special
-transparency encoding, baked background patches, or fixed pixel coordinates are
-required by the renderer. The Obsidian theme is provided separately in `grubz/theme`.
+The 120 ms setting is a target, not a guaranteed measured duration on every firmware.
+Keyboard arrows animate adjacent visible OS entries; pointer selection and scrolling
+remain static. See [configuration and rendering limits](docs/CONFIGURATION.md).
 
-- Brightness: 0–100 percent; default 32. Out-of-range values revert to 100.
-- Duration: 0–1000 ms; default 120. Zero disables motion. Out-of-range values revert
-  to 120. Firmware rendering cost may exceed the nominal duration by a frame.
-- UEFI timer milestones skip overdue frames instead of accumulating delay.
-- Pending keyboard/pointer input interrupts motion and snaps to the target;
-  the normal menu loop handles the pending input. Rapid changes prioritize input
-  over completing the animation.
-- Initial paint, scrolling, nonadjacent shortcuts, tool-row and pointer selection
-  remain static. The text-mode menu is unchanged.
-- Allocation/timer failures fall back to static rendering.
+## Choose your starting point
+
+| Goal | Start here |
+| --- | --- |
+| See the real selector without touching host boot | Build + isolated preview below |
+| Understand signatures and MOK enrollment | [Secure Boot](grubz/SECUREBOOT.md), then [shim/MOK](grubz/SHIM-MOK.md) |
+| Use it on a real PC | [Staged installation and rollback](docs/USER-GUIDE.md) |
+| Boot Debian without GRUB | [UKI updater setup](grubz/DIRECT-BOOT.md) |
 
 ## Build and tests (Debian/Ubuntu x86-64)
 
@@ -45,7 +53,16 @@ For Debian boot without chaining through GRUB, see
 updater signs kernel, initramfs and command line together and refreshes the image
 after kernel/initramfs changes. Installing it does not change firmware defaults.
 
-Dependencies: `build-essential gnu-efi`. Then:
+Target: **x86-64 UEFI**, built on Debian/Ubuntu. Legacy BIOS and other architectures
+are not validated for these changes. From a fresh clone:
+
+```sh
+git clone --branch grubz https://github.com/Muriel-Gasparini/grubz-refind.git
+cd grubz-refind
+sudo apt-get install build-essential gnu-efi python3
+```
+
+Then:
 
 ```sh
 bash grubz/test.sh
@@ -62,6 +79,8 @@ Additional dependencies: `qemu-system-x86 qemu-system-gui ovmf grub-efi-amd64-bi
 mtools dosfstools gdisk imagemagick`.
 
 ```sh
+sudo apt-get install qemu-system-x86 qemu-system-gui ovmf grub-efi-amd64-bin \
+  mtools dosfstools gdisk imagemagick
 bash grubz/build-vm.sh
 bash grubz/run-vm.sh
 ```
@@ -99,13 +118,25 @@ git switch -c update/upstream-next
 # git merge <reviewed-upstream-tag>
 ```
 
-GitHub Actions builds and tests pushes/PRs. Updates are deliberate; no automation
+GitHub Actions builds the unsigned EFI binary and runs the automated tests on pushes/PRs.
+It does not run the interactive VM or physical boot tests. Updates are deliberate; no automation
 installs or deploys this to firmware.
 
 ## Artwork and licensing
 
 Obsidian background and metallic OS emblems were generated specifically for this
 project with OpenAI image generation; theme PNGs include layout/text composition.
+Development was assisted by OpenAI Codex.
 The Debian and Windows names/marks identify the boot choices; no affiliation or
 endorsement is implied. Original upstream copyright and licensing notices are
 preserved in `LICENSE.txt` and source files. New Grubz code is GPL-3.0-or-later.
+
+## Feedback and contributions
+
+Open an issue with your firmware/GPU, supported UEFI graphics modes, distro,
+Secure Boot state, Grubz commit and reproduction steps. Do not upload private keys,
+firmware dumps or personal disk identifiers. Distinguish a VM result from a hardware
+result. Send focused PRs with relevant tests; preserve upstream history and licenses.
+
+For recovery, first use your original firmware boot entry; see the user guide before
+changing the boot order. No provided build/VM script installs Grubz on your host.

@@ -50,6 +50,57 @@ under shim/MOK Secure Boot, a real kernel package upgrade, an initramfs regenera
 and a modified unsigned/untrusted image rejection. A passing test cannot guarantee
 that arbitrary future kernels will work on every device.
 
+## Configuration template and installation order
+
+This is a host-specific administrative setup, after the VM and recovery checks in
+[the user guide](../docs/USER-GUIDE.md). Install Debian's `systemd-boot-efi`,
+`sbsigntool`, `binutils`, `python3` and the normal kernel/initramfs tools as needed.
+Installing the stub package is not the same as running `bootctl install`; this
+workflow does not require installing systemd-boot or changing the firmware defaults.
+
+Create `/etc/grubz-direct.json` as root, mode 0600, replacing the placeholders:
+
+```json
+{
+  "boot": "/boot",
+  "esp": "/boot/efi",
+  "esp_uuid": "YOUR_FAT_FILESYSTEM_UUID",
+  "stub": "/usr/lib/systemd/boot/efi/linuxx64.efi.stub",
+  "key": "/var/lib/grubz/signing/private.key",
+  "cert": "/var/lib/grubz/signing/public.pem",
+  "os_release": "/etc/os-release",
+  "cmdline": "root=UUID=YOUR_ROOT_FILESYSTEM_UUID ro YOUR_EXISTING_KERNEL_OPTIONS"
+}
+```
+
+`esp_uuid` is the FAT filesystem UUID, not its PARTUUID. Preserve relevant parameters
+from your working boot, excluding GRUB's `BOOT_IMAGE=...` bookkeeping token. Root-only
+unencrypted signing keys enable unattended updates; protect them as administrative
+credentials. Do not use the disposable VM keys. If you use an extracted/pinned stub
+instead of a distribution-managed package, plan its security updates separately.
+
+From the repository root, after configuring the correct ESP, key and command line:
+
+```sh
+sudo install -o root -g root -m 0755 grubz/direct_boot.py /usr/local/sbin/grubz-direct-update
+# Build + verify + publish first; stop if this fails.
+sudo /usr/local/sbin/grubz-direct-update
+# Register automatic updates only after successful publication.
+sudo install -d -o root -g root -m 0755 /etc/initramfs/post-update.d /etc/kernel/postrm.d
+sudo install -o root -g root -m 0755 grubz/uki-update-hook /etc/initramfs/post-update.d/zz-grubz-direct
+sudo install -o root -g root -m 0755 grubz/uki-update-hook /etc/kernel/postrm.d/zz-grubz-direct
+```
+
+Review the printed version/path/hash. Verify with `sbverify --cert YOUR_PUBLIC_CERT
+/boot/efi/EFI/grubz-linux/current.efi`, then change only the dedicated Grubz entry.
+Keep hooks installed for subsequent kernel changes. Package replacement's intermediate
+postrm phase is skipped; the new initramfs hook performs the publication.
+
+To build an isolated artifact without publishing or changing hooks, use
+`python3 grubz/direct_boot.py --config /path/to/config.json --build-only /path/to/output.efi`.
+The builder still needs access to the configured key. The chosen kernel defaults to
+the newest complete pair; `--version` selects a specific version for build-only tests.
+
 ## Verified integration (Debian 12, QEMU/OVMF)
 
 The isolated guest uses Microsoft-trusting OVMF, Debian shim 16.1, Grubz .2,
@@ -67,6 +118,6 @@ The Linux-side tools use Debian systemd-stub 252.39 and Debian kernels.
 
 Unit tests cover failed build/signature verification, insufficient ESP space,
 wrong mount, numeric version ordering, incomplete pairs, kernel removal and
-preserving the previous artifact on an identical-byte update. Hardware direct
-boot remains a separate test; VM results do not establish compatibility with
-arbitrary future kernels or every physical device.
+preserving the previous artifact on an identical-byte update. The maintainer subsequently confirmed direct Debian boot on physical hardware
+and made Grubz the permanent selector. That report does not extend the VM update
+tests to arbitrary future kernels or other physical devices.
